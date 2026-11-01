@@ -2,6 +2,8 @@ package io.github.op7418.guizangtv;
 
 import android.app.*;
 import android.content.*;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.graphics.drawable.Drawable;
 import android.os.*;
 import android.provider.Settings;
@@ -65,7 +67,7 @@ public final class FrameHomeActivity extends Activity implements HomeSurface.Act
     void updateRotation(){if(weather!=null)weather.active(resumed&&!settings.showing()&&(assistant==null||!assistant.showing())&&(library==null||!library.isShowing()));if(resumed&&appearance.get("background")==0&&!settings.showing()&&(assistant==null||!assistant.showing())&&(library==null||!library.isShowing()))wallpapers.resume();else wallpapers.pause();}
     @Override public void selected(int index){selected=index;getSharedPreferences("frame-home",0).edit().putInt("selected",index).apply();}
     @Override public void open(String id){
-        if(id.startsWith("hdmi:")){if(!XiaomiControls.openHdmi(this,Integer.parseInt(id.substring(5))))message("暂时无法切换信号源");return;}
+        if(id.startsWith("hdmi:")){int port=Integer.parseInt(id.substring(5));if(!XiaomiControls.openHdmi(this,port)&&!TvSources.openHdmi(this,port))message("暂时无法切换信号源，请用遥控器的“信号源”键");return;}
         if("com.mitv.tvhome".equals(id)){stockHome();return;}
         Intent intent=getPackageManager().getLeanbackLaunchIntentForPackage(id);
         if(intent==null)intent=getPackageManager().getLaunchIntentForPackage(id);
@@ -73,12 +75,22 @@ public final class FrameHomeActivity extends Activity implements HomeSurface.Act
     }
     @Override public void control(int index){
         if(index==0)showLibrary();
-        else if(index==1){if(!XiaomiControls.showInputs(this))message("暂时无法打开信号源");}
+        else if(index==1){if(!XiaomiControls.showInputs(this))TvSources.showPicker(this);}
         else if(index==2)settings.show();
         else if(index==3&&HomeAssistant.enabled(this))assistant.show();
     }
     void stockHome(){if(!XiaomiControls.startStockHome(this,new ComponentName("com.mitv.tvhome","com.mitv.tvhome.MainActivity")))message("暂时无法打开小米原桌面");}
     void systemSettings(){Intent i=XiaomiControls.settings(this,Settings.ACTION_SETTINGS);if(i==null)i=new Intent(Settings.ACTION_SETTINGS);launch(i,"暂时无法打开设置");}
+    /** Lets the user pick (or go back to) another launcher, e.g. the TV maker's original one. */
+    void chooseHome(){
+        Intent i=new Intent(Settings.ACTION_HOME_SETTINGS);
+        if(i.resolveActivity(getPackageManager())==null){message("请在电视系统设置的“应用”里查找默认桌面");systemSettings();return;}
+        launch(i,"暂时无法打开桌面设置");
+    }
+    private boolean isDefaultHome(){
+        ResolveInfo home=getPackageManager().resolveActivity(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),PackageManager.MATCH_DEFAULT_ONLY);
+        return home!=null&&home.activityInfo!=null&&getPackageName().equals(home.activityInfo.packageName);
+    }
     private void launch(Intent i,String error){if(i==null){message(error);return;}try{startActivity(i);}catch(RuntimeException unavailable){message(error);}}
     private void showLibrary(){
         items.discover();List<String> ids=new ArrayList<>(items.names.keySet());ids.removeIf(id->id.startsWith("hdmi:") || (getPackageManager().getLeanbackLaunchIntentForPackage(id)==null && getPackageManager().getLaunchIntentForPackage(id)==null));
@@ -91,7 +103,7 @@ public final class FrameHomeActivity extends Activity implements HomeSurface.Act
     @Override protected void onNewIntent(Intent i){super.onNewIntent(i);setIntent(i);}
     @Override protected void onPause(){resumed=false;assistant.active(false);weather.active(false);handler.removeCallbacks(tick);wallpapers.pause();if(library!=null)library.dismiss();super.onPause();}
     @Override protected void onDestroy(){assistant.destroy();settings.close();weather.destroy();wallpapers.destroy();handler.removeCallbacksAndMessages(null);super.onDestroy();}
-    @Override public void onBackPressed(){if(surface.controls.contains(getCurrentFocus()))surface.focusApp();else if(XiaomiControls.enabled())stockHome();else super.onBackPressed();}
+    @Override public void onBackPressed(){if(surface.controls.contains(getCurrentFocus()))surface.focusApp();else if(XiaomiControls.enabled())stockHome();else if(!isDefaultHome())super.onBackPressed();}
     @Override public void dump(String prefix,java.io.FileDescriptor fd,java.io.PrintWriter out,String[] args){
         super.dump(prefix,fd,out,args);wallpapers.dump(out);BootStart.dump(this,out);weather.dump(out);
         out.println("HomeAppearance: "+appearance.prefs.getAll()+" items="+items.order+" settings="+settings.page());

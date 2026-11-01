@@ -8,15 +8,16 @@ import java.util.*;
 
 /** Stable app/source identities; removing an entry never uninstalls an app. */
 final class HomeItems {
-    static final String[] DEFAULTS = {"hdmi:2", "hdmi:1", "com.xiaodianshi.tv.yst",
-            "com.xiaomi.mitv.smartshare", "com.mitv.gallery", "com.mitv.tvhome"};
+    /** First-run home: whichever of these are installed, in this order (edit freely in Settings). */
+    static final String[] CANDIDATES = {"com.ktcp.video", "com.xiaodianshi.tv.yst", "org.videolan.vlc",
+            "org.xbmc.kodi", "com.mxtech.videoplayer.ad", "com.dangbeimarket"};
     final Context context;
     final LinkedHashMap<String,String> names = new LinkedHashMap<>();
     final List<String> order = new ArrayList<>();
     HomeItems(Context c) {
         context = c;
-        String[] labels = {"PlayStation 5", "Apple TV", "哔哩哔哩", "小米投屏", "相册", "小米原桌面"};
-        for (int i=0;i<DEFAULTS.length;i++) names.put(DEFAULTS[i], labels[i]);
+        names.put("hdmi:1", "HDMI 1");
+        names.put("hdmi:2", "HDMI 2");
         discover();
         try {
             JSONArray data = new JSONArray(c.getSharedPreferences("home-items",0).getString("order","[]"));
@@ -25,7 +26,13 @@ final class HomeItems {
                 if (validId(id) && !order.contains(id)) order.add(id);
             }
         } catch (Exception ignored) { order.clear(); }
-        if (order.isEmpty()) order.addAll(Arrays.asList(DEFAULTS));
+        if (order.isEmpty()) order.addAll(defaults());
+    }
+    List<String> defaults() {
+        List<String> installed = new ArrayList<>();
+        for (String id : CANDIDATES) if (names.containsKey(id)) installed.add(id);
+        if (installed.isEmpty()) { installed.add("hdmi:1"); installed.add("hdmi:2"); }
+        return installed;
     }
     void discover() {
         for (String category : new String[]{Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER}) {
